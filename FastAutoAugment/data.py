@@ -35,7 +35,20 @@ _CIFAR_MEAN, _CIFAR_STD = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
 
 
 def get_dataloaders(dataset, batch, dataroot, split=0.15, split_idx=0, multinode=False, target_lb=-1):
+    """
+    加载数据使用
+    :param dataset: 数据集名称
+    :param batch: 训练的batch
+    :param dataroot: 数据存放的根目录
+    :param split:
+    :param split_idx:
+    :param multinode:
+    :param target_lb:
+    :return:
+    """
+    # 对不同数据集进行具体处理
     if 'cifar' in dataset or 'svhn' in dataset:
+        # 定义数据变换方式
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
@@ -82,6 +95,7 @@ def get_dataloaders(dataset, batch, dataroot, split=0.15, split_idx=0, multinode
     else:
         raise ValueError('dataset=%s' % dataset)
 
+    # 引入不同的数据转换序列，序列的定义在archive.py中，具体序列是怎么得出来的待定
     total_aug = augs = None
     if isinstance(C.get()['aug'], list):
         logger.debug('augmentation provided.')
@@ -108,6 +122,7 @@ def get_dataloaders(dataset, batch, dataroot, split=0.15, split_idx=0, multinode
         else:
             raise ValueError('not found augmentations. %s' % C.get()['aug'])
 
+    # 将图片分成两部分
     if C.get()['cutout'] > 0:
         transform_train.transforms.append(CutoutDefault(C.get()['cutout']))
 
@@ -190,6 +205,7 @@ def get_dataloaders(dataset, batch, dataroot, split=0.15, split_idx=0, multinode
 
     train_sampler = None
     if split > 0.0:
+        # 分割数据集
         sss = StratifiedShuffleSplit(n_splits=5, test_size=split, random_state=0)
         sss = sss.split(list(range(len(total_trainset))), total_trainset.targets)
         for _ in range(split_idx + 1):

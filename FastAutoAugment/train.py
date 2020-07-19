@@ -108,20 +108,39 @@ def run_epoch(model, loader, loss_fn, optimizer, desc_default='', epoch=0, write
 
 
 def train_and_eval(tag, dataroot, test_ratio=0.0, cv_fold=0, reporter=None, metric='last', save_path=None, only_eval=False, local_rank=-1, evaluation_interval=5):
+    """
+    :param tag:
+    :param dataroot:
+    :param test_ratio:
+    :param cv_fold:
+    :param reporter:取默认值None
+    :param metric:
+    :param save_path:
+    :param only_eval:
+    :param local_rank:cuda设备数量
+    :param evaluation_interval:
+    :return:
+    """
     total_batch = C.get()["batch"]
+    # 有多个cuda设备
     if local_rank >= 0:
+        # 提供分布式训练支持
         dist.init_process_group(backend='nccl', init_method='env://', world_size=int(os.environ['WORLD_SIZE']))
+        # 新增训练设备
         device = torch.device('cuda', local_rank)
         torch.cuda.set_device(device)
 
+        # get_world_size获取全局进程个数
         C.get()['lr'] *= dist.get_world_size()
         logger.info(f'local batch={C.get()["batch"]} world_size={dist.get_world_size()} ----> total batch={C.get()["batch"] * dist.get_world_size()}')
         total_batch = C.get()["batch"] * dist.get_world_size()
 
+    # get_rank获取进程优先级
     is_master = local_rank < 0 or dist.get_rank() == 0
     if is_master:
         add_filehandler(logger, args.save + '.log')
 
+    # 未知含义
     if not reporter:
         reporter = lambda **kwargs: 0
 
@@ -344,8 +363,17 @@ if __name__ == '__main__':
 
     import time
     t = time.time()
-    result = train_and_eval(args.tag, args.dataroot, test_ratio=args.cv_ratio, cv_fold=args.cv, save_path=args.save, only_eval=args.only_eval, local_rank=args.local_rank, metric='test', evaluation_interval=args.evaluation_interval)
-    elapsed = time.time() - t
+    # 进行训练和评估
+    result = train_and_eval(args.tag,
+                            args.dataroot,
+                            test_ratio=args.cv_ratio,
+                            cv_fold=args.cv,
+                            save_path=args.save,
+                            only_eval=args.only_eval,
+                            local_rank=args.local_rank,
+                            metric='test',
+                            evaluation_interval=args.evaluation_interval)
+    elapsed = time.time() - t  # 获取训练时长
 
     logger.info('done.')
     logger.info('model: %s' % C.get()['model'])

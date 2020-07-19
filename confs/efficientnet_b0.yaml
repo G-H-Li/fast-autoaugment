@@ -2,11 +2,11 @@ model:
   type: efficientnet-b0
   condconv_num_expert: 1  # if this is greater than 1(eg. 4), it activates condconv.
 dataset: imagenet
-aug: fa_reduced_imagenet
+aug: fa_reduced_imagenet  # archive.py中定义好的各种数据增广序列
 cutout: 0
 batch: 128    # per gpu
 epoch: 350
-lr: 0.008     # 0.256 for 4096 batch
+lr: 0.008     # 0.256 for 4096 batch 与batch差5个次方，具体含义尚不清楚
 lr_schedule:
   type: 'efficientnet'
   warmup:
