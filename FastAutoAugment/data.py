@@ -1,11 +1,8 @@
 import logging
 
-import numpy as np
 import os
 
 import math
-import random
-import torch
 import torchvision
 from PIL import Image
 
@@ -40,10 +37,10 @@ def get_dataloaders(dataset, batch, dataroot, split=0.15, split_idx=0, multinode
     :param dataset: 数据集名称
     :param batch: 训练的batch
     :param dataroot: 数据存放的根目录
-    :param split:
+    :param split: 分割比例
     :param split_idx:
     :param multinode:
-    :param target_lb:
+    :param target_lb:从调用情况来看，没有被使用
     :return:
     """
     # 对不同数据集进行具体处理
@@ -205,28 +202,33 @@ def get_dataloaders(dataset, batch, dataroot, split=0.15, split_idx=0, multinode
 
     train_sampler = None
     if split > 0.0:
-        # 分割数据集
+        # 分割数据集，n代表分割数据的组数，random_state代表是否启用随机
         sss = StratifiedShuffleSplit(n_splits=5, test_size=split, random_state=0)
         sss = sss.split(list(range(len(total_trainset))), total_trainset.targets)
+        # _ 代表仅控制循环次数，不使用该变量
         for _ in range(split_idx + 1):
             train_idx, valid_idx = next(sss)
-
+        # 猜测是找出对应标签的数据集
         if target_lb >= 0:
             train_idx = [i for i in train_idx if total_trainset.targets[i] == target_lb]
             valid_idx = [i for i in valid_idx if total_trainset.targets[i] == target_lb]
 
+        # 在序列中随机抽取
         train_sampler = SubsetRandomSampler(train_idx)
+        # 重写了抽样类，但是没有看见call函数
         valid_sampler = SubsetSampler(valid_idx)
-
+        # 分布式支持
         if multinode:
             train_sampler = torch.utils.data.distributed.DistributedSampler(Subset(total_trainset, train_idx), num_replicas=dist.get_world_size(), rank=dist.get_rank())
     else:
+        # 如果不分割，验证集为空
         valid_sampler = SubsetSampler([])
 
         if multinode:
             train_sampler = torch.utils.data.distributed.DistributedSampler(total_trainset, num_replicas=dist.get_world_size(), rank=dist.get_rank())
             logger.info(f'----- dataset with DistributedSampler  {dist.get_rank()}/{dist.get_world_size()}')
 
+    # 当sampler有参数时，shuffle被忽略
     trainloader = torch.utils.data.DataLoader(
         total_trainset, batch_size=batch, shuffle=True if train_sampler is None else False, num_workers=8, pin_memory=True,
         sampler=train_sampler, drop_last=True)

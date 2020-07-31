@@ -54,7 +54,7 @@ logger = get_logger('Fast AutoAugment')
 
 
 def _get_path(dataset, model, tag):
-    return os.path.join(os.path.dirname(os.path.realpath(__file__)), 'models/%s_%s_%s.model' % (dataset, model, tag))     # TODO
+    return os.path.join(os.path.dirname(os.path.realpath(__file__)), 'models/%s_%s_%s.model' % (dataset, model, tag))# TODO
 
 
 @ray.remote(num_gpus=4, max_calls=1)
