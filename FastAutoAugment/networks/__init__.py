@@ -17,6 +17,13 @@ from FastAutoAugment.tf_port.tpu_bn import TpuBatchNormalization
 
 
 def get_model(conf, num_class=10, local_rank=-1):
+    """
+    获取训练模型
+    :param conf: 模型的配置文件
+    :param num_class: 训练集类的数量
+    :param local_rank: gpu核心数量
+    :return: 返回各种网络的模型
+    """
     name = conf['type']
 
     if name == 'resnet50':
@@ -90,6 +97,7 @@ def get_model(conf, num_class=10, local_rank=-1):
     return model
 
 
+# 获取类的数量
 def num_class(dataset):
     return {
         'cifar10': 10,

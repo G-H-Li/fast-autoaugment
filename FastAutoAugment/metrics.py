@@ -33,12 +33,13 @@ class CrossEntropyLabelSmooth(torch.nn.Module):
 
     def forward(self, input, target):  # pylint: disable=redefined-builtin
         log_probs = self.logsoftmax(input)
+        # TODO 此处用处尚不了解，看不太懂
         targets = torch.zeros_like(log_probs).scatter_(1, target.unsqueeze(1), 1)
         if self.epsilon > 0.0:
             targets = (1 - self.epsilon) * targets + self.epsilon / self.num_classes
         targets = targets.detach()
         loss = (-targets * log_probs)
-
+        # 损失增加的方法
         if self.reduction in ['avg', 'mean']:
             loss = torch.mean(torch.sum(loss, dim=1))
         elif self.reduction == 'sum':

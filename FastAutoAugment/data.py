@@ -215,7 +215,7 @@ def get_dataloaders(dataset, batch, dataroot, split=0.15, split_idx=0, multinode
 
         # 在序列中随机抽取
         train_sampler = SubsetRandomSampler(train_idx)
-        # 重写了抽样类，但是没有看见call函数
+        # 继承了抽样类，但是没有看见call函数
         valid_sampler = SubsetSampler(valid_idx)
         # 分布式支持
         if multinode:

@@ -31,7 +31,7 @@ from warmup_scheduler import GradualWarmupScheduler
 logger = get_logger('Fast AutoAugment')
 logger.setLevel(logging.INFO)
 
-
+# 一个epoch的训练过程
 def run_epoch(model, loader, loss_fn, optimizer, desc_default='', epoch=0, writer=None, verbose=1, scheduler=None, is_master=True, ema=None, wd=0.0, tqdm_disabled=False):
     if verbose:
         loader = tqdm(loader, disable=tqdm_disabled)
@@ -150,11 +150,14 @@ def train_and_eval(tag, dataroot, test_ratio=0.0, cv_fold=0, reporter=None, metr
     # create a model & an optimizer
     model = get_model(C.get()['model'], num_class(C.get()['dataset']), local_rank=local_rank)
     model_ema = get_model(C.get()['model'], num_class(C.get()['dataset']), local_rank=-1)
+    # 将模型设置为evaluation模式，当模型中有dropout和batchNorm时起作用
     model_ema.eval()
 
+    # 继承torch的模型类，交叉熵标签平滑，主要用于计算loss
     criterion_ce = criterion = CrossEntropyLabelSmooth(num_class(C.get()['dataset']), C.get().conf.get('lb_smooth', 0))
     if C.get().conf.get('mixup', 0.0) > 0.0:
         criterion = CrossEntropyMixUpLabelSmooth(num_class(C.get()['dataset']), C.get().conf.get('lb_smooth', 0))
+    # 保持参数状态并根据计算的梯度进行参数更新
     if C.get()['optimizer']['type'] == 'sgd':
         optimizer = optim.SGD(
             model.parameters(),
@@ -174,6 +177,7 @@ def train_and_eval(tag, dataroot, test_ratio=0.0, cv_fold=0, reporter=None, metr
     else:
         raise ValueError('invalid optimizer type=%s' % C.get()['optimizer']['type'])
 
+    # 定义学习率变化规则
     lr_scheduler_type = C.get()['lr_schedule'].get('type', 'cosine')
     if lr_scheduler_type == 'cosine':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=C.get()['epoch'], eta_min=0.)
@@ -185,6 +189,7 @@ def train_and_eval(tag, dataroot, test_ratio=0.0, cv_fold=0, reporter=None, metr
         raise ValueError('invalid lr_schduler=%s' % lr_scheduler_type)
 
     if C.get()['lr_schedule'].get('warmup', None) and C.get()['lr_schedule']['warmup']['epoch'] > 0:
+        # 逐渐上升的学习率
         scheduler = GradualWarmupScheduler(
             optimizer,
             multiplier=C.get()['lr_schedule']['warmup']['multiplier'],
@@ -192,6 +197,7 @@ def train_and_eval(tag, dataroot, test_ratio=0.0, cv_fold=0, reporter=None, metr
             after_scheduler=scheduler
         )
 
+    # 创建最终输出
     if not tag or not is_master:
         from FastAutoAugment.metrics import SummaryWriterDummy as SummaryWriter
         logger.warning('tag not provided, no tensorboard log.')
@@ -199,15 +205,18 @@ def train_and_eval(tag, dataroot, test_ratio=0.0, cv_fold=0, reporter=None, metr
         from tensorboardX import SummaryWriter
     writers = [SummaryWriter(log_dir='./logs/%s/%s' % (tag, x)) for x in ['train', 'valid', 'test']]
 
+    # 使用ema（指数平均移动）进行参数矫正 TODO 不是很理解ema干啥的
     if C.get()['optimizer']['ema'] > 0.0 and is_master:
         # https://discuss.pytorch.org/t/how-to-apply-exponential-moving-average-decay-for-variables/10856/4?u=ildoonet
         ema = EMA(C.get()['optimizer']['ema'])
     else:
         ema = None
 
+    # 训练相关文件导入
     result = OrderedDict()
     epoch_start = 1
     if save_path != 'test.pth':     # and is_master: --> should load all data(not able to be broadcasted)
+        # 加载已有权重文件
         if save_path and os.path.exists(save_path):
             logger.info('%s file found. loading...' % save_path)
             data = torch.load(save_path)
@@ -217,6 +226,7 @@ def train_and_eval(tag, dataroot, test_ratio=0.0, cv_fold=0, reporter=None, metr
                 model.load_state_dict(data)
             else:
                 logger.info('checkpoint epoch@%d' % data['epoch'])
+                # 如果不是分布式
                 if not isinstance(model, (DataParallel, DistributedDataParallel)):
                     model.load_state_dict({k.replace('module.', ''): v for k, v in data[key].items()})
                 else:
@@ -244,12 +254,13 @@ def train_and_eval(tag, dataroot, test_ratio=0.0, cv_fold=0, reporter=None, metr
 
     tqdm_disabled = bool(os.environ.get('TASK_NAME', '')) and local_rank != 0  # KakaoBrain Environment
 
+    # 如果只进行评估
     if only_eval:
         logger.info('evaluation only+')
         model.eval()
         rs = dict()
         rs['train'] = run_epoch(model, trainloader, criterion, None, desc_default='train', epoch=0, writer=writers[0], is_master=is_master)
-
+        # 清空梯度数据
         with torch.no_grad():
             rs['valid'] = run_epoch(model, validloader, criterion, None, desc_default='valid', epoch=0, writer=writers[1], is_master=is_master)
             rs['test'] = run_epoch(model, testloader_, criterion, None, desc_default='*test', epoch=0, writer=writers[2], is_master=is_master)
